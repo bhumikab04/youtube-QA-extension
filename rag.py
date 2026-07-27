@@ -4,7 +4,10 @@ This is your notebook code, refactored into reusable functions with
 an in-memory cache so we don't rebuild the vector store on every question.
 """
 
+import os
+
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+from youtube_transcript_api.proxies import WebshareProxyConfig
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
@@ -12,9 +15,6 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 
-# ---- simple in-memory cache: video_id -> retriever ----
-# Note: this resets when the server restarts, and won't scale across
-# multiple server processes/workers. Fine for a personal project / MVP.
 _CACHE: dict[str, "object"] = {}
 
 PROMPT = PromptTemplate(
@@ -28,8 +28,22 @@ PROMPT = PromptTemplate(
     """,
     input_variables=["context", "question"],
 )
+
+
 def get_transcript(video_id: str) -> str:
-    ytt_api = YouTubeTranscriptApi()
+    proxy_username = os.environ.get("WEBSHARE_PROXY_USERNAME")
+    proxy_password = os.environ.get("WEBSHARE_PROXY_PASSWORD")
+
+    if proxy_username and proxy_password:
+        ytt_api = YouTubeTranscriptApi(
+            proxy_config=WebshareProxyConfig(
+                proxy_username=proxy_username,
+                proxy_password=proxy_password,
+            )
+        )
+    else:
+        ytt_api = YouTubeTranscriptApi()
+
     try:
         fetched_transcript = ytt_api.fetch(video_id, languages=["en"])
     except TranscriptsDisabled:
@@ -37,7 +51,6 @@ def get_transcript(video_id: str) -> str:
     except NoTranscriptFound:
         raise ValueError("No English transcript found for this video.")
     return " ".join(snippet.text for snippet in fetched_transcript)
-
 
 
 def build_retriever(video_id: str):
@@ -48,8 +61,8 @@ def build_retriever(video_id: str):
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.create_documents([transcript])
+
     embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-    
     vector_store = FAISS.from_documents(chunks, embeddings)
 
     retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
