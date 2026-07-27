@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube Video Q&A</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Ask this video</h1>
+    <div id="videoInfo" class="video-info">Detecting video…</div>
+
+    <textarea id="question" placeholder="e.g. Summarize this video"></textarea>
+    <button id="askBtn">Ask</button>
+
+    <div id="loader" class="loader" style="display:none;">
+      <div class="spinner"></div>
+      <span id="loaderText">Thinking…</span>
+    </div>
+
+    <div id="status" class="status"></div>
+    <div id="answer" class="answer"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
